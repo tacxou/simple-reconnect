@@ -3,7 +3,6 @@ package com.simpleplugins.reconnect;
 import com.google.inject.Inject;
 import com.simpleplugins.reconnect.storage.*;
 import com.simpleplugins.reconnect.util.updater.UpdateChecker;
-import com.moandjiezana.toml.TomlWriter;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
@@ -19,9 +18,7 @@ import org.spongepowered.configurate.ConfigurateException;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -164,6 +161,7 @@ public class ReconnectVelocity {
         int pluginId = 29643;
         metricsFactory.make(this, pluginId);
 
+        getProxy().getChannelRegistrar().register(ReconnectListener.DEATH_CHANNEL);
         loadStorage();
 
         getProxy().getEventManager().register(this, new ReconnectListener(this));

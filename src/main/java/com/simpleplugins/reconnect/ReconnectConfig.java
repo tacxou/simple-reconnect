@@ -12,7 +12,7 @@ public class ReconnectConfig {
     boolean debug = false;
 
     @Comment("Should we check for the latest version?")
-    boolean checkUpdates = true;
+    boolean checkUpdates = false;
 
     @Comment("Do we want to send players a message when they are reconnected to a server?")
     public boolean messageOnReconnect = true;
@@ -31,6 +31,14 @@ public class ReconnectConfig {
 
     @Comment("List any servers that you do not want people to reconnect to.")
     public List<String> blacklist = List.of();
+
+    @Comment("""
+        Max age in seconds for reconnect data.
+        If the player has been disconnected longer than this value, Simple Reconnect
+        will not force their previous server and Velocity will use its default try/fallback behavior.
+        Set to 0 to disable this limit.
+        """)
+    public long reconnectExpirySeconds = 60L;
 
     @Comment("""
         If set to true, prevents connection to fallback servers.

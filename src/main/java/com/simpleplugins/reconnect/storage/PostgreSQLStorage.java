@@ -18,7 +18,7 @@ public class PostgreSQLStorage extends StorageMethod {
         ReconnectConfig config = ReconnectVelocity.get().getConfig();
 
         HikariConfig hikariConfig = new HikariConfig();
-        hikariConfig.setDriverClassName(org.mariadb.jdbc.Driver.class.getName());
+        hikariConfig.setDriverClassName(org.postgresql.Driver.class.getName());
         if (config.storage.data.connectionParameters.useJdbcString) {
             hikariConfig.setJdbcUrl(config.storage.data.connectionParameters.jdbcString);
         } else {
@@ -40,7 +40,9 @@ public class PostgreSQLStorage extends StorageMethod {
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS reconnect_data(" +
                 "uuid VARCHAR(255)," +
                 "lastserver TEXT," +
+                "lastdisconnect BIGINT DEFAULT 0," +
                 "PRIMARY KEY(uuid))");
+            statement.executeUpdate("ALTER TABLE reconnect_data ADD COLUMN IF NOT EXISTS lastdisconnect BIGINT DEFAULT 0");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -51,7 +53,7 @@ public class PostgreSQLStorage extends StorageMethod {
         try (Connection con = ds.getConnection()) {
             Statement statement = con.createStatement();
             statement.executeUpdate(
-                "INSERT INTO reconnect_data VALUES ('" + uuid + "','" + servername + "')" +
+                "INSERT INTO reconnect_data(uuid, lastserver) VALUES ('" + uuid + "','" + servername + "')" +
                     "ON CONFLICT (uuid) DO UPDATE SET lastserver = '" + servername + "'");
         } catch (SQLException e) {
             e.printStackTrace();
@@ -65,6 +67,36 @@ public class PostgreSQLStorage extends StorageMethod {
             ResultSet rs = statement.executeQuery("SELECT lastserver FROM reconnect_data WHERE uuid = '" + uuid + "'");
             if (rs.next()) {
                 return rs.getString("lastserver");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    @Override
+    public void setLastDisconnectTimestamp(String uuid, long timestamp) {
+        try (Connection con = ds.getConnection()) {
+            Statement statement = con.createStatement();
+            statement.executeUpdate(
+                "INSERT INTO reconnect_data(uuid, lastdisconnect) VALUES ('" + uuid + "'," + timestamp + ")" +
+                    "ON CONFLICT (uuid) DO UPDATE SET lastdisconnect = " + timestamp);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public Long getLastDisconnectTimestamp(String uuid) {
+        try (Connection con = ds.getConnection()) {
+            Statement statement = con.createStatement();
+            ResultSet rs = statement.executeQuery("SELECT lastdisconnect FROM reconnect_data WHERE uuid = '" + uuid + "'");
+            if (rs.next()) {
+                long timestamp = rs.getLong("lastdisconnect");
+                if (timestamp <= 0) {
+                    return null;
+                }
+                return timestamp;
             }
         } catch (SQLException e) {
             e.printStackTrace();

@@ -38,6 +38,33 @@ public abstract class StorageMethod {
     }
 
     /**
+     * Set the last disconnect timestamp for a player, as epoch milliseconds.
+     *
+     * @param uuid the [UUID] of the player as a [String]
+     * @param timestamp epoch milliseconds when the player disconnected
+     */
+    @Deprecated(forRemoval = true)
+    public void setLastDisconnectTimestamp(String uuid, long timestamp) {
+    }
+    public void setLastDisconnectTimestamp(@NotNull UUID uniqueId, long timestamp) {
+        setLastDisconnectTimestamp(uniqueId.toString(), timestamp);
+    }
+
+    /**
+     * Get the last disconnect timestamp for a player, as epoch milliseconds.
+     *
+     * @param uuid the [UUID] of the player as a [String]
+     * @return epoch milliseconds, or null if unavailable.
+     */
+    @Deprecated(forRemoval = true)
+    public @Nullable Long getLastDisconnectTimestamp(String uuid) {
+        return null;
+    }
+    public @Nullable Long getLastDisconnectTimestamp(@NotNull UUID uniqueId) {
+        return getLastDisconnectTimestamp(uniqueId.toString());
+    }
+
+    /**
      * Get the [StorageMethod]'s String identifier.
      * @return The String identifier for this method.
      */

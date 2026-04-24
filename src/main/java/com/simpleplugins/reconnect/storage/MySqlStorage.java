@@ -40,9 +40,14 @@ public class MySqlStorage extends StorageMethod {
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS reconnect_data(" +
                     "uuid VARCHAR(255)," +
                     "lastserver MEDIUMTEXT," +
+                    "lastdisconnect BIGINT DEFAULT 0," +
                     "PRIMARY KEY(uuid))");
+            statement.executeUpdate("ALTER TABLE reconnect_data ADD COLUMN lastdisconnect BIGINT DEFAULT 0");
         } catch (SQLException e) {
-            e.printStackTrace();
+            String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+            if (!message.contains("duplicate column")) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -51,7 +56,7 @@ public class MySqlStorage extends StorageMethod {
         try (Connection con = ds.getConnection()) {
             Statement statement = con.createStatement();
             statement.executeUpdate(
-                    "INSERT INTO reconnect_data VALUES ('" + uuid + "','" + servername + "')" +
+                    "INSERT INTO reconnect_data(uuid, lastserver) VALUES ('" + uuid + "','" + servername + "')" +
                             "ON DUPLICATE KEY UPDATE lastserver = '" + servername + "'");
         } catch (SQLException e) {
             e.printStackTrace();
@@ -65,6 +70,36 @@ public class MySqlStorage extends StorageMethod {
             ResultSet rs = statement.executeQuery("SELECT lastserver FROM reconnect_data WHERE uuid = '" + uuid + "'");
             if (rs.next()) {
                 return rs.getString("lastserver");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    @Override
+    public void setLastDisconnectTimestamp(String uuid, long timestamp) {
+        try (Connection con = ds.getConnection()) {
+            Statement statement = con.createStatement();
+            statement.executeUpdate(
+                    "INSERT INTO reconnect_data(uuid, lastdisconnect) VALUES ('" + uuid + "'," + timestamp + ")" +
+                            "ON DUPLICATE KEY UPDATE lastdisconnect = " + timestamp);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public Long getLastDisconnectTimestamp(String uuid) {
+        try (Connection con = ds.getConnection()) {
+            Statement statement = con.createStatement();
+            ResultSet rs = statement.executeQuery("SELECT lastdisconnect FROM reconnect_data WHERE uuid = '" + uuid + "'");
+            if (rs.next()) {
+                long timestamp = rs.getLong("lastdisconnect");
+                if (timestamp <= 0) {
+                    return null;
+                }
+                return timestamp;
             }
         } catch (SQLException e) {
             e.printStackTrace();

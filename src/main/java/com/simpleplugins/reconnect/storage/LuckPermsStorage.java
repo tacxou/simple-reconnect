@@ -1,6 +1,5 @@
 package com.simpleplugins.reconnect.storage;
 
-import com.simpleplugins.reconnect.ReconnectCommand;
 import com.simpleplugins.reconnect.ReconnectVelocity;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.user.User;
@@ -13,6 +12,7 @@ import java.util.UUID;
 
 public class LuckPermsStorage extends StorageMethod {
     private static final @NotNull String NODE_NAME = "velocity.reconnect";
+    private static final @NotNull String NODE_TIMESTAMP_NAME = "velocity.reconnect.lastdisconnect";
 
     @Override
     public void init() {
@@ -70,6 +70,50 @@ public class LuckPermsStorage extends StorageMethod {
         return user.getCachedData()
             .getMetaData()
             .getMetaValue(NODE_NAME);
+    }
+
+    @Override
+    public void setLastDisconnectTimestamp(@NotNull UUID uuid, long timestamp) {
+        User user = LuckPermsProvider.get()
+            .getUserManager()
+            .getUser(uuid);
+
+        if (user == null) return;
+
+        MetaNode node = MetaNode.builder(NODE_TIMESTAMP_NAME, Long.toString(timestamp))
+            .build();
+
+        user.data().clear(NodeType.META.predicate((mn) -> mn.getMetaKey().equals(NODE_TIMESTAMP_NAME)));
+        user.data().add(node);
+
+        LuckPermsProvider.get()
+            .getUserManager()
+            .saveUser(user);
+    }
+
+    @Override
+    public @Nullable Long getLastDisconnectTimestamp(@NotNull UUID uuid) {
+        User user = LuckPermsProvider.get()
+            .getUserManager()
+            .getUser(uuid);
+
+        if (user == null) return null;
+
+        String value = user.getCachedData()
+            .getMetaData()
+            .getMetaValue(NODE_TIMESTAMP_NAME);
+
+        if (value == null) return null;
+
+        try {
+            long timestamp = Long.parseLong(value);
+            if (timestamp <= 0) {
+                return null;
+            }
+            return timestamp;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     @Override

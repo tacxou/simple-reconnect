@@ -44,12 +44,36 @@ public class YamlStorage extends StorageMethod {
 
     @Override
     public void setLastServer(String uuid, String servername) {
-        Objects.requireNonNull(data).set(uuid, servername);
+        YamlConfiguration yaml = Objects.requireNonNull(data);
+        yaml.set(uuid + ".server", servername);
+        saveData();
     }
 
     @Override
     public String getLastServer(String uuid) {
-        return Objects.requireNonNull(data).getString(uuid);
+        YamlConfiguration yaml = Objects.requireNonNull(data);
+        String value = yaml.getString(uuid + ".server");
+        if (value != null) {
+            return value;
+        }
+
+        // Backward compatibility with old format: uuid: "servername"
+        return yaml.getString(uuid);
+    }
+
+    @Override
+    public void setLastDisconnectTimestamp(String uuid, long timestamp) {
+        Objects.requireNonNull(data).set(uuid + ".lastDisconnectTimestamp", timestamp);
+        saveData();
+    }
+
+    @Override
+    public @Nullable Long getLastDisconnectTimestamp(String uuid) {
+        YamlConfiguration yaml = Objects.requireNonNull(data);
+        if (!yaml.contains(uuid + ".lastDisconnectTimestamp")) {
+            return null;
+        }
+        return yaml.getLong(uuid + ".lastDisconnectTimestamp");
     }
 
     @Override
