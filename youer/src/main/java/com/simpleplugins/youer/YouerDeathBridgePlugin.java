@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener {
     public static final String DEATH_MARKER = "[SIMPLE_RECONNECT_DEATH]";
     private static final long JOIN_GRACE_MS = 5000L;
+    private static final int JOIN_PORTAL_COOLDOWN_TICKS = 100;
     private final Map<UUID, Long> joinTimestamps = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> pendingDeathTransfer = new ConcurrentHashMap<>();
 
@@ -32,6 +33,8 @@ public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         joinTimestamps.put(player.getUniqueId(), System.currentTimeMillis());
+        // Prevent immediate back-teleport loops when a player joins inside/near transfer portals.
+        player.setPortalCooldown(JOIN_PORTAL_COOLDOWN_TICKS);
 
         // Some hybrid stacks can transiently restore players with invalid dead/dying state.
         // Normalize health right after join to prevent backend safety kicks.
