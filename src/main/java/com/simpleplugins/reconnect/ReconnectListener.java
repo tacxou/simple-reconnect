@@ -230,6 +230,17 @@ public class ReconnectListener {
         }
 
         if (deathKick) {
+            String currentServerName = event.getServer().getServerInfo().getName();
+            if (isServerInTryList(currentServerName)) {
+                if (plugin.getConfig().debug) {
+                    plugin.getLogger().info(
+                        "[SimpleReconnect] Death kick from '{}' ignored because server is already in Velocity try list.",
+                        currentServerName
+                    );
+                }
+                return;
+            }
+
             RegisteredServer tryServer = plugin.getProxy()
                 .getServer(TRY_SERVER_NAME)
                 .orElse(null);
@@ -317,6 +328,14 @@ public class ReconnectListener {
         String reason = getKickReasonPlainText(event).toLowerCase(Locale.ROOT);
         return reason.contains("error occurred while creating playerentity")
             || reason.contains("please login again");
+    }
+
+    private boolean isServerInTryList(@NotNull String serverName) {
+        return plugin.getProxy()
+            .getConfiguration()
+            .getAttemptConnectionOrder()
+            .stream()
+            .anyMatch(serverName::equalsIgnoreCase);
     }
 
     private boolean isInWindow(Long timestamp, long now, long windowMs) {

@@ -1,0 +1,8 @@
+# Unique id for this backend server (example: survie, farm).
+# Set it per backend instance.
+server-id: ""
+
+# If server-id is in this list, death transfer marker is not sent on that server.
+# Example: keep deaths local on survie because it's already in Velocity try list.
+disable-death-transfer-on-servers:
+  - "survie"

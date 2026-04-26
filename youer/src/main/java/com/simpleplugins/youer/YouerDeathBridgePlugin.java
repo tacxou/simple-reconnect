@@ -1,6 +1,7 @@
 package com.simpleplugins.youer;
 
 import net.kyori.adventure.text.Component;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -15,6 +16,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.Locale;
 
 public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener {
     public static final String DEATH_MARKER = "[SIMPLE_RECONNECT_DEATH]";
@@ -22,11 +25,15 @@ public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener
     private static final int JOIN_PORTAL_COOLDOWN_TICKS = 100;
     private final Map<UUID, Long> joinTimestamps = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> pendingDeathTransfer = new ConcurrentHashMap<>();
+    private String serverId;
+    private List<String> disabledServerIds;
 
     @Override
     public void onEnable() {
+        saveDefaultConfig();
+        loadConfigValues();
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("YouerDeathBridge enabled.");
+        getLogger().info("YouerDeathBridge enabled on serverId='" + serverId + "' (disabledOn=" + disabledServerIds + ").");
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -58,6 +65,10 @@ public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener
 
         // Extra guard for hybrid/modded stacks where death-like events can misfire on first transfer.
         if (player.getHealth() > 0.0D || lastDamageCause == null || inJoinGrace) {
+            return;
+        }
+
+        if (!isDeathTransferEnabledOnThisServer()) {
             return;
         }
 
@@ -93,5 +104,23 @@ public final class YouerDeathBridgePlugin extends JavaPlugin implements Listener
             double maxHealth = player.getMaxHealth();
             player.setHealth(Math.min(minSafeHealth, maxHealth));
         }
+    }
+
+    private void loadConfigValues() {
+        FileConfiguration config = getConfig();
+        serverId = config.getString("server-id", "").trim();
+        disabledServerIds = config.getStringList("disable-death-transfer-on-servers");
+    }
+
+    private boolean isDeathTransferEnabledOnThisServer() {
+        if (serverId.isEmpty()) {
+            // If not configured, keep previous behavior to avoid surprise disabling.
+            return true;
+        }
+
+        String normalizedServerId = serverId.toLowerCase(Locale.ROOT);
+        return disabledServerIds.stream()
+            .map(entry -> entry.toLowerCase(Locale.ROOT))
+            .noneMatch(normalizedServerId::equals);
     }
 }
