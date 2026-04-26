@@ -6,3 +6,19 @@ server-id: ""
 # Example: keep deaths local on survie because it's already in Velocity try list.
 disable-death-transfer-on-servers:
   - "survie"
+
+# Target backend server for death transfer.
+# You can use:
+# - a real backend name (e.g. "survie")
+# - "try" to use the first entry from try-order-servers below.
+death-transfer-server: "try"
+
+# Used when death-transfer-server is "try".
+# Keep same order as Velocity attempt-connection-order.
+try-order-servers:
+  - "survie"
+  - "farm"
+
+# Use Bungee/Velocity plugin-message Connect transfer before fallback kick marker.
+use-plugin-message-transfer: true
+
