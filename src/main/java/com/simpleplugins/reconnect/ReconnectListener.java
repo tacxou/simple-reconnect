@@ -13,7 +13,6 @@ import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -196,44 +195,9 @@ public class ReconnectListener {
     }
 
     private boolean isDeathKick(@NotNull KickedFromServerEvent event) {
-        Component reasonComponent = event.getServerKickReason().orElse(null);
-        if (reasonComponent == null) {
-            return false;
-        }
-
-        if (containsDeathTranslationKey(reasonComponent)) {
-            return true;
-        }
-
-        String plainText = PlainTextComponentSerializer.plainText()
-            .serialize(reasonComponent)
-            .trim()
-            .toLowerCase(Locale.ROOT);
-
-        return plainText.contains(DEATH_MARKER.toLowerCase(Locale.ROOT))
-            || plainText.equals("you died!")
-            || plainText.equals("you died")
-            || plainText.equals("vous etes mort !")
-            || plainText.equals("vous etes mort")
-            || plainText.equals("vous êtes mort !")
-            || plainText.equals("vous êtes mort")
-            || plainText.contains(" was slain")
-            || plainText.contains(" was shot")
-            || plainText.contains(" was killed")
-            || plainText.contains(" drowned")
-            || plainText.contains(" blew up")
-            || plainText.contains(" hit the ground too hard")
-            || plainText.contains(" fell")
-            || plainText.contains(" burned")
-            || plainText.contains(" went up in flames")
-            || plainText.contains(" tried to swim in lava")
-            || plainText.contains(" suffocated")
-            || plainText.contains(" starved")
-            || plainText.contains(" withered away")
-            || plainText.contains(" froze to death")
-            || plainText.contains(" est mort")
-            || plainText.contains(" a ete tue")
-            || plainText.contains(" a été tué");
+        return getKickReasonPlainText(event)
+            .toLowerCase(Locale.ROOT)
+            .contains(DEATH_MARKER.toLowerCase(Locale.ROOT));
     }
 
     private @NotNull String getKickReasonPlainText(@NotNull KickedFromServerEvent event) {
@@ -243,19 +207,4 @@ public class ReconnectListener {
             .orElse("<empty>");
     }
 
-    private boolean containsDeathTranslationKey(@NotNull Component component) {
-        if (component instanceof TranslatableComponent translatable) {
-            if (translatable.key().startsWith("death.")) {
-                return true;
-            }
-        }
-
-        for (Component child : component.children()) {
-            if (containsDeathTranslationKey(child)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
