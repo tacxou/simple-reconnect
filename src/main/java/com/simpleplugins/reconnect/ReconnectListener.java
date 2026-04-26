@@ -18,15 +18,20 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class ReconnectListener {
     private static final String TRY_SERVER_NAME = "try";
     private static final String DEATH_MARKER = "[SIMPLE_RECONNECT_DEATH]";
+    private static final long TRANSIENT_RETRY_WINDOW_MS = 15000L;
 
     private final @NotNull ReconnectVelocity plugin;
+    private final Map<UUID, Long> transientRetryWindow = new ConcurrentHashMap<>();
 
     public ReconnectListener(@NotNull ReconnectVelocity plugin) {
         this.plugin = plugin;
@@ -144,14 +149,16 @@ public class ReconnectListener {
     @Subscribe
     public void onPlayerKicked(@NotNull KickedFromServerEvent event) {
         boolean deathKick = isDeathKick(event);
+        boolean transientJoinError = isTransientJoinError(event);
 
         if (plugin.getConfig().debug) {
             plugin.getLogger().info(
-                "[SimpleReconnect] Kick debug | player={} | from={} | reason='{}' | deathKick={} | currentResult={}",
+                "[SimpleReconnect] Kick debug | player={} | from={} | reason='{}' | deathKick={} | transientJoinError={} | currentResult={}",
                 event.getPlayer().getUsername(),
                 event.getServer().getServerInfo().getName(),
                 getKickReasonPlainText(event),
                 deathKick,
+                transientJoinError,
                 event.getResult().getClass().getSimpleName()
             );
         }
@@ -177,6 +184,26 @@ public class ReconnectListener {
             }
 
             return;
+        }
+
+        if (transientJoinError && event.getResult() instanceof KickedFromServerEvent.RedirectPlayer) {
+            UUID playerId = event.getPlayer().getUniqueId();
+            long now = System.currentTimeMillis();
+            Long lastRetry = transientRetryWindow.get(playerId);
+
+            if (lastRetry == null || now - lastRetry > TRANSIENT_RETRY_WINDOW_MS) {
+                transientRetryWindow.put(playerId, now);
+                event.setResult(KickedFromServerEvent.RedirectPlayer.create(event.getServer()));
+
+                if (plugin.getConfig().debug) {
+                    plugin.getLogger().info(
+                        "[SimpleReconnect] Transient join error detected. Retrying '{}' once for {}.",
+                        event.getServer().getServerInfo().getName(),
+                        event.getPlayer().getUsername()
+                    );
+                }
+                return;
+            }
         }
 
         if (!plugin.getConfig().preventFallback) return;
@@ -205,6 +232,12 @@ public class ReconnectListener {
             .map(PlainTextComponentSerializer.plainText()::serialize)
             .map(String::trim)
             .orElse("<empty>");
+    }
+
+    private boolean isTransientJoinError(@NotNull KickedFromServerEvent event) {
+        String reason = getKickReasonPlainText(event).toLowerCase(Locale.ROOT);
+        return reason.contains("error occurred while creating playerentity")
+            || reason.contains("please login again");
     }
 
 }
