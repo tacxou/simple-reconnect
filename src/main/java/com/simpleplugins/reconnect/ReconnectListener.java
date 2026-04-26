@@ -29,9 +29,16 @@ public class ReconnectListener {
     private static final String TRY_SERVER_NAME = "try";
     private static final String DEATH_MARKER = "[SIMPLE_RECONNECT_DEATH]";
     private static final long TRANSIENT_RETRY_WINDOW_MS = 15000L;
+    private static final long TRANSIENT_RETRY_DELAY_SECONDS = 2L;
+    private static final long QUICK_BOUNCE_WINDOW_MS = 5000L;
+    private static final long QUICK_BOUNCE_RETRY_DELAY_SECONDS = 1L;
 
     private final @NotNull ReconnectVelocity plugin;
     private final Map<UUID, Long> transientRetryWindow = new ConcurrentHashMap<>();
+    private final Map<UUID, String> lastConnectedServer = new ConcurrentHashMap<>();
+    private final Map<UUID, String> previousConnectedServer = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastConnectedAt = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> quickBounceRetryWindow = new ConcurrentHashMap<>();
 
     public ReconnectListener(@NotNull ReconnectVelocity plugin) {
         this.plugin = plugin;
@@ -111,10 +118,61 @@ public class ReconnectListener {
 
     @Subscribe
     public void onChangeServer(@NotNull ServerConnectedEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        String newServerName = event.getServer().getServerInfo().getName();
+        String oldCurrent = lastConnectedServer.get(playerId);
+        String oldPrevious = previousConnectedServer.get(playerId);
+        long now = System.currentTimeMillis();
+        long lastSwitchAt = lastConnectedAt.getOrDefault(playerId, 0L);
+
+        boolean quickBounce = oldCurrent != null
+            && oldPrevious != null
+            && newServerName.equals(oldPrevious)
+            && now - lastSwitchAt <= QUICK_BOUNCE_WINDOW_MS;
+
+        if (quickBounce) {
+            Long lastRetry = quickBounceRetryWindow.get(playerId);
+            if (!isInWindow(lastRetry, now, TRANSIENT_RETRY_WINDOW_MS)) {
+                quickBounceRetryWindow.put(playerId, now);
+                String bouncedFromServerName = oldCurrent;
+
+                plugin.getProxy().getServer(bouncedFromServerName).ifPresent(targetServer ->
+                    plugin.getProxy().getScheduler()
+                        .buildTask(plugin, () -> {
+                            if (!event.getPlayer().isActive()) {
+                                return;
+                            }
+
+                            event.getPlayer()
+                                .createConnectionRequest(targetServer)
+                                .connect();
+                        })
+                        .delay(QUICK_BOUNCE_RETRY_DELAY_SECONDS, TimeUnit.SECONDS)
+                        .schedule()
+                );
+
+                if (plugin.getConfig().debug) {
+                    plugin.getLogger().info(
+                        "[SimpleReconnect] Quick bounce detected after death. Retrying '{}' for {}.",
+                        bouncedFromServerName,
+                        event.getPlayer().getUsername()
+                    );
+                }
+            }
+        }
+
+        if (oldCurrent == null) {
+            previousConnectedServer.remove(playerId);
+        } else {
+            previousConnectedServer.put(playerId, oldCurrent);
+        }
+        lastConnectedServer.put(playerId, newServerName);
+        lastConnectedAt.put(playerId, now);
+
         ReconnectVelocity.get()
             .getStorageManager()
             .getStorageMethod()
-            .setLastServer(event.getPlayer().getUniqueId(), event.getServer().getServerInfo().getName());
+            .setLastServer(playerId, newServerName);
     }
 
     @Subscribe
@@ -134,9 +192,17 @@ public class ReconnectListener {
 
     @Subscribe
     public void onPlayerDisconnect(@NotNull DisconnectEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+
         plugin.getStorageManager()
             .getStorageMethod()
-            .setLastDisconnectTimestamp(event.getPlayer().getUniqueId(), System.currentTimeMillis());
+            .setLastDisconnectTimestamp(playerId, System.currentTimeMillis());
+
+        lastConnectedServer.remove(playerId);
+        previousConnectedServer.remove(playerId);
+        lastConnectedAt.remove(playerId);
+        quickBounceRetryWindow.remove(playerId);
+        transientRetryWindow.remove(playerId);
     }
 
     /**
@@ -193,11 +259,24 @@ public class ReconnectListener {
 
             if (lastRetry == null || now - lastRetry > TRANSIENT_RETRY_WINDOW_MS) {
                 transientRetryWindow.put(playerId, now);
-                event.setResult(KickedFromServerEvent.RedirectPlayer.create(event.getServer()));
+                RegisteredServer failedServer = event.getServer();
+
+                plugin.getProxy().getScheduler()
+                    .buildTask(plugin, () -> {
+                        if (!event.getPlayer().isActive()) {
+                            return;
+                        }
+
+                        event.getPlayer()
+                            .createConnectionRequest(failedServer)
+                            .connect();
+                    })
+                    .delay(TRANSIENT_RETRY_DELAY_SECONDS, TimeUnit.SECONDS)
+                    .schedule();
 
                 if (plugin.getConfig().debug) {
                     plugin.getLogger().info(
-                        "[SimpleReconnect] Transient join error detected. Retrying '{}' once for {}.",
+                        "[SimpleReconnect] Transient join error detected. Scheduling delayed retry to '{}' for {}.",
                         event.getServer().getServerInfo().getName(),
                         event.getPlayer().getUsername()
                     );
@@ -238,6 +317,10 @@ public class ReconnectListener {
         String reason = getKickReasonPlainText(event).toLowerCase(Locale.ROOT);
         return reason.contains("error occurred while creating playerentity")
             || reason.contains("please login again");
+    }
+
+    private boolean isInWindow(Long timestamp, long now, long windowMs) {
+        return timestamp != null && now - timestamp <= windowMs;
     }
 
 }
