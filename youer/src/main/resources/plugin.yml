@@ -1,0 +1,6 @@
+name: YouerDeathBridge
+version: 1.0.0
+main: com.simpleplugins.youer.YouerDeathBridgePlugin
+api-version: "1.21"
+authors: [TacxTV]
+description: Kicks players with a death marker for Velocity redirection.

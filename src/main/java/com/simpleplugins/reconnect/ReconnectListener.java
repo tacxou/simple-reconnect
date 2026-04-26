@@ -13,14 +13,19 @@ import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 public class ReconnectListener {
+    private static final String TRY_SERVER_NAME = "try";
+    private static final String DEATH_MARKER = "[SIMPLE_RECONNECT_DEATH]";
 
     private final @NotNull ReconnectVelocity plugin;
 
@@ -139,6 +144,42 @@ public class ReconnectListener {
      */
     @Subscribe
     public void onPlayerKicked(@NotNull KickedFromServerEvent event) {
+        boolean deathKick = isDeathKick(event);
+
+        if (plugin.getConfig().debug) {
+            plugin.getLogger().info(
+                "[SimpleReconnect] Kick debug | player={} | from={} | reason='{}' | deathKick={} | currentResult={}",
+                event.getPlayer().getUsername(),
+                event.getServer().getServerInfo().getName(),
+                getKickReasonPlainText(event),
+                deathKick,
+                event.getResult().getClass().getSimpleName()
+            );
+        }
+
+        if (deathKick) {
+            RegisteredServer tryServer = plugin.getProxy()
+                .getServer(TRY_SERVER_NAME)
+                .orElse(null);
+
+            if (tryServer != null) {
+                event.setResult(KickedFromServerEvent.RedirectPlayer.create(tryServer));
+                if (plugin.getConfig().debug) {
+                    plugin.getLogger().info(
+                        "[SimpleReconnect] Death kick redirect applied -> '{}'",
+                        TRY_SERVER_NAME
+                    );
+                }
+            } else if (plugin.getConfig().debug) {
+                plugin.getLogger().warn(
+                    "[SimpleReconnect] Death kick detected but fallback server '{}' is missing.",
+                    TRY_SERVER_NAME
+                );
+            }
+
+            return;
+        }
+
         if (!plugin.getConfig().preventFallback) return;
 
         RegisteredServer server = event.getServer();
@@ -152,5 +193,69 @@ public class ReconnectListener {
 
             event.setResult(KickedFromServerEvent.DisconnectPlayer.create(msg));
         }
+    }
+
+    private boolean isDeathKick(@NotNull KickedFromServerEvent event) {
+        Component reasonComponent = event.getServerKickReason().orElse(null);
+        if (reasonComponent == null) {
+            return false;
+        }
+
+        if (containsDeathTranslationKey(reasonComponent)) {
+            return true;
+        }
+
+        String plainText = PlainTextComponentSerializer.plainText()
+            .serialize(reasonComponent)
+            .trim()
+            .toLowerCase(Locale.ROOT);
+
+        return plainText.contains(DEATH_MARKER.toLowerCase(Locale.ROOT))
+            || plainText.equals("you died!")
+            || plainText.equals("you died")
+            || plainText.equals("vous etes mort !")
+            || plainText.equals("vous etes mort")
+            || plainText.equals("vous êtes mort !")
+            || plainText.equals("vous êtes mort")
+            || plainText.contains(" was slain")
+            || plainText.contains(" was shot")
+            || plainText.contains(" was killed")
+            || plainText.contains(" drowned")
+            || plainText.contains(" blew up")
+            || plainText.contains(" hit the ground too hard")
+            || plainText.contains(" fell")
+            || plainText.contains(" burned")
+            || plainText.contains(" went up in flames")
+            || plainText.contains(" tried to swim in lava")
+            || plainText.contains(" suffocated")
+            || plainText.contains(" starved")
+            || plainText.contains(" withered away")
+            || plainText.contains(" froze to death")
+            || plainText.contains(" est mort")
+            || plainText.contains(" a ete tue")
+            || plainText.contains(" a été tué");
+    }
+
+    private @NotNull String getKickReasonPlainText(@NotNull KickedFromServerEvent event) {
+        return event.getServerKickReason()
+            .map(PlainTextComponentSerializer.plainText()::serialize)
+            .map(String::trim)
+            .orElse("<empty>");
+    }
+
+    private boolean containsDeathTranslationKey(@NotNull Component component) {
+        if (component instanceof TranslatableComponent translatable) {
+            if (translatable.key().startsWith("death.")) {
+                return true;
+            }
+        }
+
+        for (Component child : component.children()) {
+            if (containsDeathTranslationKey(child)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
