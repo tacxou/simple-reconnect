@@ -161,7 +161,6 @@ public class ReconnectVelocity {
         int pluginId = 29643;
         metricsFactory.make(this, pluginId);
 
-        getProxy().getChannelRegistrar().register(ReconnectListener.DEATH_CHANNEL);
         loadStorage();
 
         getProxy().getEventManager().register(this, new ReconnectListener(this));
